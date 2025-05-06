@@ -132,3 +132,60 @@ func GetByShortID(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"data": val})
 }
+
+// Edit url
+func EditURL(c *gin.Context) {
+	shortId := c.Param("shortID")
+	var body models.Request
+
+	if err := c.ShouldBind(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Cannot Parse the JSON",
+		})
+		return
+	}
+
+	r := database.CreateClient(0)
+	defer r.Close()
+
+	// check the short id exists in the db or not
+	_, err := r.Get(database.Ctx, shortId).Result()
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Short ID doesn't exists",
+		})
+	}
+
+	// Update the content of the url, expiry time & id
+	err = r.Set(database.Ctx, shortId, body.URL, body.Expiry*3600*time.Second).Err()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Unable to update the shorten url",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Content has been updated",
+	})
+}
+
+// Delete url
+func DeleteURL(c *gin.Context) {
+	shortId := c.Param("shortID")
+
+	r := database.CreateClient(0)
+	defer r.Close()
+
+	err := r.Del(database.Ctx, shortId).Err()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Unable to delete shorten url",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Shorten URL deleted successfully",
+	})
+}
