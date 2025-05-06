@@ -15,3 +15,8 @@ type Response struct {
 	XRateReamainig  int           `json:"rate_limit"`
 	XRateLimitReset time.Duration `json:"rate_limit_reset"`
 }
+
+type TagRequest struct {
+	ShortID string `json:"shortID"`
+	Tag     string `json:"tag"`
+}

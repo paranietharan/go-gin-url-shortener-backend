@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"encoding/json"
 	"go-url-shortener/api/database"
 	"go-url-shortener/api/models"
 	"go-url-shortener/api/utils"
@@ -188,4 +189,78 @@ func DeleteURL(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Shorten URL deleted successfully",
 	})
+}
+
+// add tag
+func AddTag(c *gin.Context) {
+	var tagRequest models.TagRequest
+	if err := c.ShouldBind(&tagRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid request body",
+		})
+		return
+	}
+
+	shortId := tagRequest.ShortID
+	tag := tagRequest.Tag
+
+	r := database.CreateClient(0)
+	defer r.Close()
+
+	val, err := r.Get(database.Ctx, shortId).Result()
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Data not found for the given short id",
+		})
+		return
+	}
+
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(val), &data); err != nil {
+
+		// if the data is not a json object assume it as a plain string
+		data = make(map[string]interface{})
+		data["data"] = val
+	}
+
+	var tags []string
+	if existingTags, ok := data["tags"].([]interface{}); ok {
+		for _, t := range existingTags {
+			if strTag, ok := t.(string); ok {
+				tags = append(tags, strTag)
+			}
+		}
+	}
+
+	// check for duplicate tags
+	for _, existingTag := range tags {
+		if existingTag == tag {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Tag Already exists",
+			})
+			return
+		}
+	}
+
+	// add new tag
+	tags = append(tags, tag)
+	data["tags"] = tags
+
+	updatedData, err := json.Marshal(data)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to marshal updated data",
+		})
+		return
+	}
+
+	err = r.Set(database.Ctx, shortId, updatedData, 0).Err()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to update the data",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, data)
 }
