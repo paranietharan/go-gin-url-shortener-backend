@@ -12,6 +12,7 @@ import (
 	"github.com/asaskevich/govalidator"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
+	"github.com/google/uuid"
 )
 
 // Shorten url
@@ -61,7 +62,73 @@ func ShortenURL(c *gin.Context) {
 
 	body.URL = utils.EnsureHttpPrefix(body.URL)
 
-	c.JSON(200, gin.H{
-		"message": "URL shortened successfully",
-	})
+	var id string
+	if body.CustomShort == "" {
+		id = uuid.New().String()[:6]
+	} else {
+		id = body.CustomShort
+	}
+
+	r := database.CreateClient(0)
+	defer r.Close()
+
+	val, _ = r.Get(database.Ctx, id).Result()
+
+	if val != "" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Short already exists",
+		})
+		return
+	}
+
+	if body.Expiry == 0 {
+		body.Expiry = 24
+	}
+
+	r.Set(database.Ctx, id, body.URL, body.Expiry*3600*time.Second).Err()
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Unable to connect to the redis server",
+		})
+		return
+	}
+
+	resp := models.Response{
+		Expiry:          body.Expiry,
+		XRateLimitReset: 30,
+		XRateReamainig:  10,
+		URL:             body.URL,
+		CustomShort:     "",
+	}
+
+	r2.Decr(database.Ctx, c.ClientIP())
+
+	val, _ = r2.Get(database.Ctx, c.ClientIP()).Result()
+	resp.XRateReamainig, _ = strconv.Atoi(val)
+
+	ttl, _ := r2.TTL(database.Ctx, c.ClientIP()).Result()
+	resp.XRateLimitReset = ttl / time.Nanosecond / time.Minute
+
+	resp.CustomShort = os.Getenv("DOMAIN") + "/" + id
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// Get the short url
+func GetByShortID(c *gin.Context) {
+	shortId := c.Param("shortID")
+
+	r := database.CreateClient(0)
+	defer r.Close()
+
+	val, err := r.Get(database.Ctx, shortId).Result()
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Data not found for given short ID",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": val})
 }
