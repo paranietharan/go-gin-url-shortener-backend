@@ -59,6 +59,8 @@ func ShortenURL(c *gin.Context) {
 		return
 	}
 
+	body.URL = utils.EnsureHttpPrefix(body.URL)
+
 	c.JSON(200, gin.H{
 		"message": "URL shortened successfully",
 	})
