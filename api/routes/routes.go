@@ -86,7 +86,7 @@ func ShortenURL(c *gin.Context) {
 		body.Expiry = 24
 	}
 
-	r.Set(database.Ctx, id, body.URL, body.Expiry*3600*time.Second).Err()
+	err = r.Set(database.Ctx, id, body.URL, body.Expiry*3600*time.Second).Err()
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

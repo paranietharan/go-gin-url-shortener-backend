@@ -1,0 +1,36 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8080"
+    volumes:
+      - ./.env:/project/go-url-shortner/.env 
+    environment:
+      - DB_ADDR=db:6379
+      - DB_PASS=
+      - APP_PORT=8080
+      - DOMAIN=localhost:3000
+      - API_QUOTA=10
+    depends_on:
+      - db
+    networks:
+      - url-shortener-network
+    restart: on-failure
+
+  db:
+    build: ./db
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - url-shortener-network
+
+networks:
+  url-shortener-network:
+    driver: bridge
+
+volumes:
+  redis-data:
